@@ -136,7 +136,27 @@ enum {
 enum {
     PARTY_BOX_LEFT_COLUMN,
     PARTY_BOX_RIGHT_COLUMN,
+    PARTY_BOX_GRID,         // 15x5 slot of the two-column singles layout
 };
+
+// Size in tiles of a slot in the two-column grid, see sSinglePartyMenuWindowTemplate.
+#define PARTY_GRID_SLOT_WIDTH  15
+#define PARTY_GRID_SLOT_HEIGHT  5
+
+// The layouts that InitPartyMenuWindows gives sSinglePartyMenuWindowTemplate to,
+// i.e. everything except the double and multi battle layouts.
+static inline bool32 PartyMenuUsesGridLayout(enum PartyMenuLayout layout)
+{
+    switch (layout)
+    {
+    case PARTY_LAYOUT_DOUBLE:
+    case PARTY_LAYOUT_MULTI:
+    case PARTY_LAYOUT_MULTI_SHOWCASE:
+        return FALSE;
+    default:
+        return TRUE;
+    }
+}
 
 enum {
     TAG_POKEBALL = 1200,
@@ -454,6 +474,7 @@ static void Task_BattlePyramidChooseMonHeldItems(u8);
 static void ShiftMoveSlot(struct BoxPokemon *, u8, u8);
 static void BlitBitmapToPartyWindow_LeftColumn(u8, u8, u8, u8, u8, bool8);
 static void BlitBitmapToPartyWindow_RightColumn(u8, u8, u8, u8, u8, bool8);
+static void BlitBitmapToPartyWindow_Grid(u8, u8, u8, u8, u8, bool8);
 static void CursorCb_Summary(u8);
 static void CursorCb_Switch(u8);
 static void CursorCb_Cancel1(u8);
@@ -986,6 +1007,14 @@ static void LoadPartyMenuBoxes(enum PartyMenuLayout layout)
         sPartyMenuBoxes[i].itemSpriteId = SPRITE_NONE;
         sPartyMenuBoxes[i].pokeballSpriteId = SPRITE_NONE;
         sPartyMenuBoxes[i].statusSpriteId = SPRITE_NONE;
+    }
+
+    if (PartyMenuUsesGridLayout(layout))
+    {
+        // Every slot of the two-column grid uses the same 15x5 box
+        for (i = 0; i < PARTY_SIZE; i++)
+            sPartyMenuBoxes[i].infoRects = &sPartyBoxInfoRects[PARTY_BOX_GRID];
+        return;
     }
 
     // The first party mon goes in the left column
@@ -1833,65 +1862,79 @@ static void UpdateCurrentPartySelection(s8 *slotPtr, s8 movementDir)
 static void UpdatePartySelectionSingleLayout(s8 *slotPtr, s8 movementDir)
 {
     enum BattleTrainer partyTrainer = (gPartyMenu.layout == PARTY_LAYOUT_MULTI_FULL_PARTNER) ? B_TRAINER_PARTNER : B_TRAINER_PLAYER;
-    // PARTY_SIZE + 1 is Cancel, PARTY_SIZE is Confirm
+    s8 count = gPartiesCount[partyTrainer];
+    s8 slot = *slotPtr;
+    s8 col, row, target;
+
+    // Slots are laid out in two columns of three rows: slot = row * 2 + col.
+    // PARTY_SIZE + 1 is Cancel, PARTY_SIZE is Confirm.
     switch (movementDir)
     {
     case MENU_DIR_UP:
-        if (*slotPtr == 0)
+        if (slot == PARTY_SIZE)
         {
-            *slotPtr = PARTY_SIZE + 1;
+            *slotPtr = count - 1;
         }
-        else if (*slotPtr == PARTY_SIZE)
-        {
-            *slotPtr = gPartiesCount[partyTrainer] - 1;
-        }
-        else if (*slotPtr == PARTY_SIZE + 1)
+        else if (slot == PARTY_SIZE + 1)
         {
             if (sPartyMenuInternal->chooseHalf)
                 *slotPtr = PARTY_SIZE;
             else
-                *slotPtr = gPartiesCount[partyTrainer] - 1;
+                *slotPtr = count - 1;
         }
         else
         {
-            (*slotPtr)--;
+            col = slot & 1;
+            row = slot >> 1;
+            if (row == 0)
+            {
+                *slotPtr = PARTY_SIZE + 1;
+            }
+            else
+            {
+                // Climb the column, skipping rows this column doesn't reach
+                do
+                    row--;
+                while (row > 0 && (s8)(row * 2 + col) >= count);
+                target = row * 2 + col;
+                *slotPtr = (target < count) ? target : 0;
+            }
         }
         break;
     case MENU_DIR_DOWN:
-        if (*slotPtr == PARTY_SIZE + 1)
+        if (slot == PARTY_SIZE + 1)
         {
             *slotPtr = 0;
         }
+        else if (slot == PARTY_SIZE)
+        {
+            *slotPtr = PARTY_SIZE + 1;
+        }
         else
         {
-            if (*slotPtr == gPartiesCount[partyTrainer] - 1)
+            col = slot & 1;
+            row = slot >> 1;
+            target = (row + 1) * 2 + col;
+            if (row + 1 < PARTY_SIZE / 2 && target < count)
+            {
+                *slotPtr = target;
+            }
+            else
             {
                 if (sPartyMenuInternal->chooseHalf)
                     *slotPtr = PARTY_SIZE;
                 else
                     *slotPtr = PARTY_SIZE + 1;
             }
-            else
-            {
-                (*slotPtr)++;
-            }
         }
         break;
     case MENU_DIR_RIGHT:
-        if (gPartiesCount[partyTrainer] != 1 && *slotPtr == 0)
-        {
-            if (sPartyMenuInternal->lastSelectedSlot == 0)
-                *slotPtr = 1;
-            else
-                *slotPtr = sPartyMenuInternal->lastSelectedSlot;
-        }
+        if (slot < PARTY_SIZE && (slot & 1) == 0 && slot + 1 < count)
+            *slotPtr = slot + 1;
         break;
     case MENU_DIR_LEFT:
-        if (*slotPtr != 0 && *slotPtr != PARTY_SIZE && *slotPtr != PARTY_SIZE + 1)
-        {
-            sPartyMenuInternal->lastSelectedSlot = *slotPtr;
-            *slotPtr = 0;
-        }
+        if (slot < PARTY_SIZE && (slot & 1) == 1)
+            *slotPtr = slot - 1;
         break;
     }
 }
@@ -2487,9 +2530,26 @@ static void BlitBitmapToPartyWindow_RightColumn(u8 windowId, u8 x, u8 y, u8 widt
         BlitBitmapToPartyWindow(windowId, sSlotTilemap_WideNoHP, 18, x, y, width, height);
 }
 
+static void BlitBitmapToPartyWindow_Grid(u8 windowId, u8 x, u8 y, u8 width, u8 height, bool8 hideHP)
+{
+    if (width == 0 && height == 0)
+    {
+        width = PARTY_GRID_SLOT_WIDTH;
+        height = PARTY_GRID_SLOT_HEIGHT;
+    }
+    if (hideHP == FALSE)
+        BlitBitmapToPartyWindow(windowId, sSlotTilemap_Grid, PARTY_GRID_SLOT_WIDTH, x, y, width, height);
+    else
+        BlitBitmapToPartyWindow(windowId, sSlotTilemap_GridNoHP, PARTY_GRID_SLOT_WIDTH, x, y, width, height);
+}
+
 static void DrawEmptySlot(u8 windowId)
 {
-    BlitBitmapToPartyWindow(windowId, sSlotTilemap_WideEmpty, 18, 0, 0, 18, 3);
+    if (PartyMenuUsesGridLayout(gPartyMenu.layout))
+        BlitBitmapToPartyWindow(windowId, sSlotTilemap_GridEmpty, PARTY_GRID_SLOT_WIDTH, 0, 0,
+                                PARTY_GRID_SLOT_WIDTH, PARTY_GRID_SLOT_HEIGHT);
+    else
+        BlitBitmapToPartyWindow(windowId, sSlotTilemap_WideEmpty, 18, 0, 0, 18, 3);
 }
 
 #define LOAD_PARTY_BOX_PAL(paletteIds, paletteOffsets)                                                    \
@@ -3199,6 +3259,18 @@ static void CursorCb_Switch(u8 taskId)
 #define tSlot1SlideDir data[10]
 #define tSlot2SlideDir data[11]
 
+// Which screen edge a slot leaves through during the switch animation.
+// In the two-column grid the left column has to exit left, otherwise it would
+// slide straight over the slot next to it and erase its tilemap.
+static s16 PartyMenuBoxSlideDir(s16 width, s16 left)
+{
+    if (width == 10)
+        return -1;  // the wide layouts' main box always exits left
+    if (PartyMenuUsesGridLayout(gPartyMenu.layout) && left < PARTY_GRID_SLOT_WIDTH)
+        return -1;
+    return 1;
+}
+
 static void SwitchSelectedMons(u8 taskId)
 {
     s16 *data = gTasks[taskId].data;
@@ -3217,20 +3289,14 @@ static void SwitchSelectedMons(u8 taskId)
         tSlot1Width = GetWindowAttribute(windowIds[0], WINDOW_WIDTH);
         tSlot1Height = GetWindowAttribute(windowIds[0], WINDOW_HEIGHT);
         tSlot1Offset = 0;
-        if (tSlot1Width == 10)
-            tSlot1SlideDir = -1;
-        else
-            tSlot1SlideDir = 1;
+        tSlot1SlideDir = PartyMenuBoxSlideDir(tSlot1Width, tSlot1Left);
         windowIds[1] = sPartyMenuBoxes[gPartyMenu.slotId2].windowId;
         tSlot2Left = GetWindowAttribute(windowIds[1], WINDOW_TILEMAP_LEFT);
         tSlot2Top = GetWindowAttribute(windowIds[1], WINDOW_TILEMAP_TOP);
         tSlot2Width = GetWindowAttribute(windowIds[1], WINDOW_WIDTH);
         tSlot2Height = GetWindowAttribute(windowIds[1], WINDOW_HEIGHT);
         tSlot2Offset = 0;
-        if (tSlot2Width == 10)
-            tSlot2SlideDir = -1;
-        else
-            tSlot2SlideDir = 1;
+        tSlot2SlideDir = PartyMenuBoxSlideDir(tSlot2Width, tSlot2Left);
         sSlot1TilemapBuffer = Alloc(tSlot1Width * (tSlot1Height << 1));
         sSlot2TilemapBuffer = Alloc(tSlot2Width * (tSlot2Height << 1));
         CopyToBufferFromBgTilemap(0, sSlot1TilemapBuffer, tSlot1Left, tSlot1Top, tSlot1Width, tSlot1Height);
@@ -3316,7 +3382,7 @@ static void SlidePartyMenuBoxOneStep(u8 taskId)
 static void Task_SlideSelectedSlotsOffscreen(u8 taskId)
 {
     s16 *data = gTasks[taskId].data;
-    u16 slidingSlotPositions[2];
+    s16 slidingSlotPositions[2];
 
     SlidePartyMenuBoxOneStep(taskId);
     SlidePartyMenuBoxSpritesOneStep(taskId);
@@ -3325,8 +3391,11 @@ static void Task_SlideSelectedSlotsOffscreen(u8 taskId)
     slidingSlotPositions[0] = tSlot1Left + tSlot1Offset;
     slidingSlotPositions[1] = tSlot2Left + tSlot2Offset;
 
-    // Both slots have slid offscreen
-    if (slidingSlotPositions[0] > 33 && slidingSlotPositions[1] > 33)
+    // Both slots have slid offscreen. A slot leaving through the left edge is
+    // done once its right edge passes column 0, one leaving through the right
+    // edge once its left edge passes the far side of the tilemap.
+    if ((slidingSlotPositions[0] + tSlot1Width < 0 || slidingSlotPositions[0] > 33)
+     && (slidingSlotPositions[1] + tSlot2Width < 0 || slidingSlotPositions[1] > 33))
     {
         tSlot1SlideDir *= -1;
         tSlot2SlideDir *= -1;
