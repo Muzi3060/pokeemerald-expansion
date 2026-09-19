@@ -503,7 +503,8 @@ static void DoTrainerBattle(void)
     TryUpdateGymLeaderRematchFromTrainer();
 }
 
-static bool32 IsMayBrendanStarterVariantTrainer(u16 trainerId)
+// May has explicit custom species in trainers.party; only legacy Brendan teams need remapping.
+static bool32 IsBrendanStarterVariantTrainer(u16 trainerId)
 {
     switch (trainerId)
     {
@@ -512,31 +513,16 @@ static bool32 IsMayBrendanStarterVariantTrainer(u16 trainerId)
     case TRAINER_BRENDAN_ROUTE_119_TREECKO:
     case TRAINER_BRENDAN_RUSTBORO_TREECKO:
     case TRAINER_BRENDAN_LILYCOVE_TREECKO:
-    case TRAINER_MAY_ROUTE_103_TREECKO:
-    case TRAINER_MAY_ROUTE_110_TREECKO:
-    case TRAINER_MAY_ROUTE_119_TREECKO:
-    case TRAINER_MAY_RUSTBORO_TREECKO:
-    case TRAINER_MAY_LILYCOVE_TREECKO:
     case TRAINER_BRENDAN_ROUTE_103_TORCHIC:
     case TRAINER_BRENDAN_ROUTE_110_TORCHIC:
     case TRAINER_BRENDAN_ROUTE_119_TORCHIC:
     case TRAINER_BRENDAN_RUSTBORO_TORCHIC:
     case TRAINER_BRENDAN_LILYCOVE_TORCHIC:
-    case TRAINER_MAY_ROUTE_103_TORCHIC:
-    case TRAINER_MAY_ROUTE_110_TORCHIC:
-    case TRAINER_MAY_ROUTE_119_TORCHIC:
-    case TRAINER_MAY_RUSTBORO_TORCHIC:
-    case TRAINER_MAY_LILYCOVE_TORCHIC:
     case TRAINER_BRENDAN_ROUTE_103_MUDKIP:
     case TRAINER_BRENDAN_ROUTE_110_MUDKIP:
     case TRAINER_BRENDAN_ROUTE_119_MUDKIP:
     case TRAINER_BRENDAN_RUSTBORO_MUDKIP:
     case TRAINER_BRENDAN_LILYCOVE_MUDKIP:
-    case TRAINER_MAY_ROUTE_103_MUDKIP:
-    case TRAINER_MAY_ROUTE_110_MUDKIP:
-    case TRAINER_MAY_ROUTE_119_MUDKIP:
-    case TRAINER_MAY_RUSTBORO_MUDKIP:
-    case TRAINER_MAY_LILYCOVE_MUDKIP:
         return TRUE;
     }
 
@@ -587,7 +573,7 @@ static void TryApplyCustomRivalStarterMapping(struct Pokemon *party, u16 trainer
     u8 i;
     u16 playerStarterSlot;
 
-    if (!IsMayBrendanStarterVariantTrainer(trainerId))
+    if (!IsBrendanStarterVariantTrainer(trainerId))
         return;
 
     playerStarterSlot = VarGet(VAR_STARTER_MON);
