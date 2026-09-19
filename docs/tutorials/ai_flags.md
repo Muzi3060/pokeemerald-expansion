@@ -39,6 +39,14 @@ Expansion has a few "composite" AI flags. This means that these flags have no un
 
 Expansion has LOADS of flags, which will be covered in the rest of this guide. If you don't want to engage with detailed trainer AI tuning though, you can just use these two composite flags, and trust that expansion will keep their contents updated to always represent the most standard and the smartest behaviour we can.
 
+## Campaign default: `AI_FLAG_ENHANCED_TRAINER`
+
+Hoenn and Kanto campaign trainers use `AI: Enhanced Trainer` in their `.party` files. This profile combines `AI_FLAG_BASIC_TRAINER`, `AI_FLAG_SMART_SWITCHING`, and `AI_FLAG_PP_STALL_PREVENTION`. Smart switching also enables smarter choices of which Pokemon to send out, including after a KO.
+
+This increases move-selection and switching difficulty without enabling omniscience or changing teams, levels, IVs, EVs, held items, or moves. Existing trainer-specific flags such as `Risky` and `Force Setup First Turn` remain in effect. Special facilities that assign their own AI flags retain their existing behavior.
+
+For new campaign trainers, specify `AI: Enhanced Trainer` explicitly. To tune this shared profile, edit `AI_FLAG_ENHANCED_TRAINER` in `include/constants/battle_ai.h`. To tune switching probabilities, edit `include/config/ai.h`. This profile changes the normal campaign baseline; it does not enable the separate difficulty-selection system controlled by `B_VAR_DIFFICULTY`.
+
 ## `AI_FLAG_CHECK_BAD_MOVE`
 The AI will avoid using moves that are likely to fail in the current situation. This flag helps prevent the AI from making ineffective choices, such as using moves into immunities, into invulnerable states, or when the moves are otherwise hindered by abilities, terrain, or status conditions.
 
